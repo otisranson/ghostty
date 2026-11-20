@@ -2439,6 +2439,30 @@ keybind: Keybinds = .{},
 /// Available since 1.0.0
 @"resize-overlay-duration": Duration = .{ .duration = 750 * std.time.ns_per_ms },
 
+/// Delay between printed characters, emulating the slow serial-line
+/// terminals of the 1970s and 1980s (IBM 3270, Bell Labs / DEC VT-style
+/// teletypes). Output from the program is revealed one character at a time
+/// instead of all at once.
+///
+/// A value of `0` (the default) disables this and output is processed as
+/// fast as possible. The value uses the same format as other durations,
+/// for example:
+///
+///   * `output-delay = 30ms`
+///   * `output-delay = 8ms`
+///
+/// Only printable characters are delayed. Escape sequences and control
+/// characters are processed immediately so cursor movement and colors don't
+/// slow things down. Full-screen applications that use the alternate screen
+/// (vim, less, htop, and so on) are never delayed.
+///
+/// Because output is consumed slowly, a program that writes a lot of text
+/// will be backed up behind the delay, just like on a real slow serial line.
+/// Closing the window discards any remaining delay immediately.
+///
+/// This can be changed at runtime and applies to new output.
+@"output-delay": Duration = .{ .duration = 0 },
+
 /// If true, when there are multiple split panes, the mouse selects the pane
 /// that is focused. This only applies to the currently focused window; e.g.
 /// mousing over a split in an unfocused window will not focus that split
@@ -11448,4 +11472,26 @@ test "compatibility: window new-window" {
             cfg.@"macos-dock-drop-behavior",
         );
     }
+}
+
+test "output-delay" {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var cfg = try Config.default(alloc);
+    defer cfg.deinit();
+
+    // Disabled by default.
+    try testing.expectEqual(@as(u64, 0), cfg.@"output-delay".duration);
+
+    var reader: std.Io.Reader = .fixed("output-delay = 30ms\n");
+    var it: cli.args.LineIterator = .{
+        .r = &reader,
+        .filepath = "test",
+    };
+    try cli.args.parse(Config, alloc, &cfg, &it);
+    try testing.expectEqual(
+        @as(u64, 30 * std.time.ns_per_ms),
+        cfg.@"output-delay".duration,
+    );
 }

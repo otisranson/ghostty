@@ -73,6 +73,10 @@ last_cursor_reset: ?std.Io.Timestamp = null,
 /// to keep track of any state or if its already been freed.
 thread_enter_state: ?*ThreadEnterState = null,
 
+/// Set when the IO thread is exiting so that a throttled `processOutput`
+/// (see the `output-delay` config) stops sleeping and drops its backlog.
+output_abort: std.atomic.Value(bool) = .init(false),
+
 /// The state we need to keep around only until we enter the IO
 /// thread. Then we can throw it all away.
 const ThreadEnterState = struct {
@@ -196,6 +200,7 @@ pub const DerivedConfig = struct {
     xt_checksum_report: bool,
     xt_checksum_extension: terminalpkg.xt_checksum.Flags,
     conditional_state: configpkg.ConditionalState,
+    output_delay_ns: u64,
 
     pub fn init(
         alloc_gpa: Allocator,
@@ -235,6 +240,7 @@ pub const DerivedConfig = struct {
             .xt_checksum_report = config.@"vt-xt-checksum-report",
             .xt_checksum_extension = xtChecksumFlags(config.@"vt-xt-checksum-extension"),
             .conditional_state = config._conditional_state,
+            .output_delay_ns = config.@"output-delay".duration,
 
             // This has to be last so that we copy AFTER the arena allocations
             // above happen (Zig assigns in order).
@@ -425,6 +431,7 @@ pub fn threadEnter(
 }
 
 pub fn threadExit(self: *Termio, data: *ThreadData) void {
+    self.output_abort.store(true, .release);
     self.backend.threadExit(data);
 }
 
@@ -705,9 +712,67 @@ pub fn focusGained(self: *Termio, td: *ThreadData, focused: bool) !void {
 pub fn processOutput(self: *Termio, buf: []const u8) void {
     // We are modifying terminal state from here on out and we need
     // the lock to grab our read data.
-    self.renderer_state.mutex.lockUncancelable(global.io());
-    defer self.renderer_state.mutex.unlock(global.io());
-    self.processOutputLocked(buf);
+    {
+        self.renderer_state.mutex.lockUncancelable(global.io());
+        defer self.renderer_state.mutex.unlock(global.io());
+        if (self.config.output_delay_ns == 0 or
+            self.terminal.screens.active_key == .alternate)
+        {
+            self.processOutputLocked(buf);
+            return;
+        }
+    }
+
+    self.processOutputThrottled(buf);
+}
+
+/// Process output one character at a time, sleeping between printed
+/// characters (the `output-delay` config). The renderer lock is NOT held
+/// while sleeping so the renderer can draw each character as it arrives.
+fn processOutputThrottled(self: *Termio, buf: []const u8) void {
+    var i: usize = 0;
+    while (i < buf.len) : (i += 1) {
+        if (self.output_abort.load(.acquire)) return;
+
+        var delay_ns: u64 = 0;
+        {
+            self.renderer_state.mutex.lockUncancelable(global.io());
+            defer self.renderer_state.mutex.unlock(global.io());
+
+            // Config may have changed (or the app entered the alternate
+            // screen) while we were sleeping: process the remainder fast.
+            if (self.config.output_delay_ns == 0 or
+                self.terminal.screens.active_key == .alternate)
+            {
+                self.processOutputLocked(buf[i..]);
+                return;
+            }
+
+            // A character is "completed" by this byte if the parser was
+            // idle before it (so we're not inside an escape sequence)
+            // and is idle after it (so a UTF-8 sequence isn't pending)
+            // and the byte isn't a control character, OR the byte
+            // finished a multi-byte UTF-8 sequence.
+            const stream = &self.terminal_stream;
+            const was_ground = stream.parser.state == .ground;
+            const was_utf8 = stream.utf8decoder.state != 0;
+            self.processOutputLocked(buf[i .. i + 1]);
+            if (stream.ground() and was_ground) {
+                const c = buf[i];
+                if (was_utf8 or (c >= 0x20 and c != 0x7f)) {
+                    delay_ns = self.config.output_delay_ns;
+                }
+            }
+        }
+
+        if (delay_ns > 0) {
+            std.Io.sleep(
+                global.io(),
+                .fromNanoseconds(@intCast(delay_ns)),
+                .awake,
+            ) catch {};
+        }
+    }
 }
 
 /// Process output from readdata but the lock is already held.
