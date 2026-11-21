@@ -153,6 +153,7 @@ pub fn threadEnter(
         .read_thread_pipe = pipe[1],
         .read_thread_fd = pty_fds.read,
         .termios_timer = termios_timer,
+        .output_epoch = &io.output_epoch,
     } };
 
     // Start our process watcher. If we have an xev.Process use it.
@@ -419,6 +420,7 @@ pub fn queueWrite(
     while (i < data.len) {
         const w = try exec.write_pool.create(alloc);
         w.td = exec;
+        w.interrupt = false;
         const buf = &w.buf;
         const slice = slice: {
             // The maximum end index is either the end of our data or
@@ -454,7 +456,10 @@ pub fn queueWrite(
             break :slice buf[0..buf_i];
         };
 
-        //for (slice) |b| log.warn("write: {x}", .{b});
+        // Ctrl+C, Ctrl+\\ and Ctrl+Z cancel any output still in flight.
+        for (slice) |b| {
+            if (b == 0x03 or b == 0x1c or b == 0x1a) w.interrupt = true;
+        }
 
         exec.write_stream.queueWrite(
             td.loop,
@@ -477,6 +482,8 @@ fn ttyWrite(
     r: xev.WriteError!usize,
 ) xev.CallbackAction {
     const w = w_.?;
+    const interrupt = w.interrupt;
+    const epoch = w.td.output_epoch;
     w.td.write_pool.destroy(w);
 
     const d = r catch |err| {
@@ -484,6 +491,10 @@ fn ttyWrite(
         return .disarm;
     };
     _ = d;
+
+    // The interrupt is in the pty now (the kernel has already signaled the
+    // foreground process), so everything read before this point is stale.
+    if (interrupt) _ = epoch.fetchAdd(1, .release);
     //log.info("WROTE: {d}", .{d});
 
     return .disarm;
@@ -505,6 +516,10 @@ pub const ThreadData = struct {
 
         /// The buffer for the data being written.
         buf: [64]u8,
+
+        /// True if this write contains an interrupt character. Once it
+        /// has been written, queued output is stale (see Termio.output_epoch).
+        interrupt: bool = false,
     };
 
     /// Process start time and boolean of whether its already exited.
@@ -541,6 +556,9 @@ pub const ThreadData = struct {
     termios_timer: xev.Timer,
     termios_timer_c: xev.Completion = .{},
     termios_timer_running: bool = true,
+
+    /// Bumped when an interrupt character is written. Points at Termio.output_epoch.
+    output_epoch: *std.atomic.Value(u32),
 
     /// The last known termios mode. Used for change detection
     /// to prevent unnecessary locking of expensive mutexes.
@@ -1376,6 +1394,10 @@ pub const ReadThread = struct {
         /// time by the gather stage, read by the parse stage.
         lens: [buffer_count]usize = @splat(0),
 
+        /// The Termio.output_epoch observed before each buffer was filled.
+        stamps: [buffer_count]u32 = @splat(0),
+        pending_stamp: u32 = 0,
+
         /// Ring state: head is the next slot the gather stage fills,
         /// tail is the next slot the parse stage consumes, count is
         /// the number of published, unconsumed batches.
@@ -1462,7 +1484,7 @@ pub const ReadThread = struct {
         const gather_thread = std.Thread.spawn(
             .{},
             gatherMainPosix,
-            .{ fd, quit, &pipeline },
+            .{ fd, quit, &pipeline, io },
         ) catch |err| {
             // If we can't spawn a thread the process is already
             // doomed (every surface spawns several), so don't try
@@ -1479,6 +1501,7 @@ pub const ReadThread = struct {
         // order until the gather stage reports the stream is over and
         // the ring is drained.
         while (true) {
+            var stamp: u32 = 0;
             const batch: []const u8 = batch: {
                 pipeline.mutex.lockUncancelable(global.io());
                 defer pipeline.mutex.unlock(global.io());
@@ -1487,12 +1510,13 @@ pub const ReadThread = struct {
                     pipeline.batch_ready.waitUncancelable(global.io(), &pipeline.mutex);
                 }
                 const slot = pipeline.tail;
+                stamp = pipeline.stamps[slot];
                 break :batch pipeline.bufs[slot][0..pipeline.lens[slot]];
             };
 
             // The batch buffer is owned by this stage until we advance
             // the tail below, so it is safe to read outside the lock.
-            io.processOutput(batch);
+            io.processOutputAt(batch, stamp);
 
             {
                 pipeline.mutex.lockUncancelable(global.io());
@@ -1523,7 +1547,7 @@ pub const ReadThread = struct {
     /// bridging the kernel queue's refill gaps for saturated streams,
     /// and publishes each batch to the parse stage. This thread owns
     /// all fd monitoring, including the quit fd.
-    fn gatherMainPosix(fd: posix.fd_t, quit: posix.fd_t, pipeline: *Pipeline) void {
+    fn gatherMainPosix(fd: posix.fd_t, quit: posix.fd_t, pipeline: *Pipeline, io: *termio.Termio) void {
         if (builtin.target.os.tag.isDarwin()) {
             internal_os.macos.pthread_setname_np(&"io-gather".*);
             setQosClass();
@@ -1548,6 +1572,8 @@ pub const ReadThread = struct {
             .{ .fd = pipeline.idle_read_fd, .events = posix.POLL.IN, .revents = undefined },
         };
 
+        var seen_epoch: u32 = io.output_epoch.load(.acquire);
+
         while (true) {
             // Claim the next free buffer. This blocks only when the
             // parse stage is a full ring behind, which is exactly when
@@ -1561,6 +1587,21 @@ pub const ReadThread = struct {
                 }
                 break :buf &pipeline.bufs[pipeline.head];
             };
+
+            // If an interrupt was sent while throttling output, the kernel
+            // queue still holds output the user cancelled. Read it and throw
+            // it away so it never reaches the screen.
+            const epoch = io.output_epoch.load(.acquire);
+            if (epoch != seen_epoch) {
+                seen_epoch = epoch;
+                if (io.output_throttled.load(.acquire)) {
+                    while (true) {
+                        const n = posix.read(fd, buf) catch break;
+                        if (n == 0) break;
+                    }
+                }
+            }
+            pipeline.pending_stamp = epoch;
 
             var total: usize = 0;
             var bridge_start: ?std.Io.Timestamp = null;
@@ -1698,6 +1739,7 @@ pub const ReadThread = struct {
             if (total > 0) {
                 pipeline.mutex.lockUncancelable(global.io());
                 pipeline.lens[pipeline.head] = total;
+                pipeline.stamps[pipeline.head] = pipeline.pending_stamp;
                 pipeline.head = (pipeline.head + 1) % buffer_count;
                 pipeline.count += 1;
                 pipeline.mutex.unlock(global.io());

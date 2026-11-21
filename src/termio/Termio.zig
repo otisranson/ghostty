@@ -77,6 +77,16 @@ thread_enter_state: ?*ThreadEnterState = null,
 /// (see the `output-delay` config) stops sleeping and drops its backlog.
 output_abort: std.atomic.Value(bool) = .init(false),
 
+/// Incremented (by the pty write path) once an interrupt character
+/// (Ctrl+C, Ctrl+\\, Ctrl+Z) has been written to the pty. Output read
+/// before the bump is stale and is discarded when throttling.
+output_epoch: std.atomic.Value(u32) = .init(0),
+
+/// True when output is currently being throttled: `output-delay` is set
+/// and we're not on the alternate screen. Mirrors state that otherwise
+/// requires the renderer lock so the IO threads can check it cheaply.
+output_throttled: std.atomic.Value(bool) = .init(false),
+
 /// The state we need to keep around only until we enter the IO
 /// thread. Then we can throw it all away.
 const ThreadEnterState = struct {
@@ -487,6 +497,7 @@ pub fn changeConfig(self: *Termio, td: *ThreadData, config: *DerivedConfig) !voi
     // from another thread.
     self.terminal_stream.handler.changeConfig(&self.config);
     td.backend.changeConfig(&self.config);
+    self.updateThrottled();
 
     // Update the configuration that we know about.
     //
@@ -710,6 +721,13 @@ pub fn focusGained(self: *Termio, td: *ThreadData, focused: bool) !void {
 /// call with pty data but it is also called by the read thread when using
 /// an exec subprocess.
 pub fn processOutput(self: *Termio, buf: []const u8) void {
+    self.processOutputAt(buf, self.output_epoch.load(.acquire));
+}
+
+/// Like processOutput, but `epoch` is the value of `output_epoch` when
+/// `buf` was read. If an interrupt has been sent since and output is being
+/// throttled, `buf` is stale (the user cancelled it) and is dropped.
+pub fn processOutputAt(self: *Termio, buf: []const u8, epoch: u32) void {
     // We are modifying terminal state from here on out and we need
     // the lock to grab our read data.
     {
@@ -721,18 +739,31 @@ pub fn processOutput(self: *Termio, buf: []const u8) void {
             self.processOutputLocked(buf);
             return;
         }
+
+        if (self.output_epoch.load(.acquire) != epoch) return;
     }
 
-    self.processOutputThrottled(buf);
+    self.processOutputThrottled(buf, epoch);
+}
+
+/// Refresh `output_throttled`. The renderer lock must be held.
+fn updateThrottled(self: *Termio) void {
+    self.output_throttled.store(
+        self.config.output_delay_ns != 0 and
+            self.terminal.screens.active_key != .alternate,
+        .release,
+    );
 }
 
 /// Process output one character at a time, sleeping between printed
 /// characters (the `output-delay` config). The renderer lock is NOT held
 /// while sleeping so the renderer can draw each character as it arrives.
-fn processOutputThrottled(self: *Termio, buf: []const u8) void {
+fn processOutputThrottled(self: *Termio, buf: []const u8, epoch: u32) void {
     var i: usize = 0;
     while (i < buf.len) : (i += 1) {
         if (self.output_abort.load(.acquire)) return;
+        // An interrupt was sent: drop what's left of this stale output.
+        if (self.output_epoch.load(.acquire) != epoch) return;
 
         var delay_ns: u64 = 0;
         {
@@ -824,6 +855,9 @@ fn processOutputLocked(self: *Termio, buf: []const u8) void {
         self.terminal_stream.handler.termio_messaged = false;
         self.mailbox.notify();
     }
+
+    // The stream may have switched screens.
+    self.updateThrottled();
 }
 
 /// Sends a DSR response for the current color scheme to the pty.

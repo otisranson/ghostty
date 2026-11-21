@@ -2458,7 +2458,10 @@ keybind: Keybinds = .{},
 ///
 /// Because output is consumed slowly, a program that writes a lot of text
 /// will be backed up behind the delay, just like on a real slow serial line.
-/// Closing the window discards any remaining delay immediately.
+/// Pressing Ctrl+C, Ctrl+\ or Ctrl+Z discards any output that was still
+/// waiting to be shown (it is not dumped to the screen), and closing the
+/// window discards any remaining delay immediately. The delay itself stays
+/// in effect for everything that follows.
 ///
 /// This can be changed at runtime and applies to new output.
 @"output-delay": Duration = .{ .duration = 0 },
