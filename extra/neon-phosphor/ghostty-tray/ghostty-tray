@@ -12,6 +12,7 @@ so nothing in Ghostty itself needs to change. X11 only.
 Started at login by ~/.config/autostart/ghostty-tray.desktop.
 Needs: gir1.2-wnck-3.0
 """
+import os
 import signal
 import subprocess
 import warnings
@@ -33,6 +34,19 @@ def is_ghostty(win):
         (win.get_class_group_name() or "") in GHOSTTY_CLASSES
         or (win.get_class_instance_name() or "") in GHOSTTY_CLASSES
     )
+
+
+def spawn(argv, on_exit=None):
+    """Start argv detached from the tray, reap it (no zombies), report exit code."""
+    proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, start_new_session=True)
+
+    def reaped(pid, status):
+        proc.returncode = os.waitstatus_to_exitcode(status)  # GLib already reaped it
+        if on_exit:
+            on_exit(proc.returncode)
+
+    GLib.child_watch_add(GLib.PRIORITY_DEFAULT, proc.pid, reaped)
+    return proc
 
 
 def now():
@@ -113,7 +127,16 @@ class GhosttyTray:
             self.new_window()
 
     def new_window(self):
-        subprocess.Popen(["ghostty", "+new-window"])
+        """Ask a running Ghostty for a window; if none is running, start one.
+
+        `ghostty +new-window` only talks to an existing instance over D-Bus
+        and exits non-zero when there isn't one, so fall back to a plain launch.
+        """
+        def done(code):
+            if code != 0:
+                spawn(["ghostty"])
+
+        spawn(["ghostty", "+new-window"], on_exit=done)
 
     def restore_all(self):
         for win in list(self.hidden):
