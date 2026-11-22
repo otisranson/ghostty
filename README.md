@@ -35,11 +35,11 @@ DEC VT-style teletypes), instead of all at once.
 
 ```ini
 # ~/.config/ghostty/config.ghostty
-output-delay = 5ms
+output-delay = 4ms
 ```
 
 <p align="center">
-  <img src="images/output-delay/demo.gif" alt="Text typing out one character at a time in Ghostty with output-delay set to 5ms" width="720">
+  <img src="images/output-delay/demo.gif" alt="extra/lorem-ipsum.txt, with its Bell Labs and IBM ASCII art, typing out one character at a time in Ghostty with output-delay set to 4ms" width="720">
 </p>
 
 <details>
@@ -49,9 +49,10 @@ output-delay = 5ms
 </p>
 </details>
 
-The recording uses the Neon Phosphor config below and was made in a
-VirtualBox VM with software rendering, so it runs a little slower than the
-5ms setting would on real hardware.
+The recording `cat`s [`extra/lorem-ipsum.txt`](extra/lorem-ipsum.txt) with
+the Neon Phosphor config below. It was made in a VirtualBox VM with software
+rendering, so it runs a little slower than the 4ms setting would on real
+hardware.
 
 - **Off by default** (`0`). Any duration works, e.g. `5ms` or `30ms`.
 - **Only printable characters are delayed.** Escape sequences and control

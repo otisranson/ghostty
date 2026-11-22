@@ -5,7 +5,7 @@
 
 # ── Fork feature ───────────────────────────────────────────────
 # Character-by-character output delay (feature/output-delay build)
-output-delay = 2ms
+output-delay = 4ms
 
 # ── Type ───────────────────────────────────────────────────────
 # IBM Plex Mono is IBM's own typeface; DejaVu is the fallback until it's installed.
