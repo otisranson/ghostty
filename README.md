@@ -21,6 +21,49 @@
   </p>
 </p>
 
+## About this fork
+
+This is a personal fork of [Ghostty](https://github.com/ghostty-org/ghostty)
+that adds one new feature: **`output-delay`**, a typewriter-style effect for
+terminal output.
+
+### `output-delay`
+
+Set a delay between printed characters and output appears one character at a
+time, like the slow serial-line terminals of the 1970s and 1980s (IBM 3270,
+DEC VT-style teletypes), instead of all at once.
+
+```ini
+# ~/.config/ghostty/config.ghostty
+output-delay = 5ms
+```
+
+- **Off by default** (`0`). Any duration works, e.g. `5ms` or `30ms`.
+- **Only printable characters are delayed.** Escape sequences and control
+  characters go through immediately, so colors and cursor movement stay fast.
+- **Full-screen apps are never slowed down.** Anything on the alternate
+  screen (vim, less, htop, ...) runs at full speed.
+- **Ctrl+C, Ctrl+\ or Ctrl+Z throws away queued output** instead of dumping
+  it on screen. The delay itself stays on for whatever comes next.
+- **Changes apply live.** Edit the value and reload the config
+  (Ctrl+Shift+, on Linux) without restarting.
+
+The feature lives on this branch,
+[`feature/output-delay`](https://github.com/otisranson/ghostty/tree/feature/output-delay).
+The fork's `main` branch is kept identical to upstream Ghostty.
+
+### Building it
+
+```sh
+git clone -b feature/output-delay https://github.com/otisranson/ghostty.git
+cd ghostty
+zig build -Doptimize=ReleaseFast
+./zig-out/bin/ghostty
+```
+
+See [HACKING.md](HACKING.md) for the required Zig version and system
+dependencies.
+
 ## About
 
 Ghostty is a terminal emulator that differentiates itself by being
