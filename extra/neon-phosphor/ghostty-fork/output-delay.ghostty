@@ -1,0 +1,3 @@
+# Fork-only settings (feature/output-delay build). Loaded optionally from
+# ~/.config/ghostty/config.ghostty; stock Ghostty never sees this file.
+output-delay = 4ms

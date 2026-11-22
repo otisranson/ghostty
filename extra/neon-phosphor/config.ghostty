@@ -4,8 +4,9 @@
 # └──────────────────────────────────────────────────────────────┘
 
 # ── Fork feature ───────────────────────────────────────────────
-# Character-by-character output delay (feature/output-delay build)
-output-delay = 4ms
+# Character-by-character output delay lives outside this folder so the folder
+# stays portable: stock Ghostty skips the missing optional (?) file silently.
+config-file = ?~/.config/ghostty-fork/output-delay.ghostty
 
 # ── Type ───────────────────────────────────────────────────────
 # IBM Plex Mono is IBM's own typeface; DejaVu is the fallback until it's installed.
@@ -55,7 +56,7 @@ palette = 0=#1a1029
 palette = 1=#ff2e63
 palette = 2=#3dffa8
 palette = 3=#ffb000
-palette = 4=#2d7bff
+palette = 4=#ffaf00
 palette = 5=#ff2bd6
 palette = 6=#00f0ff
 palette = 7=#c8c3e0
@@ -63,7 +64,7 @@ palette = 8=#4a3b66
 palette = 9=#ff6b9a
 palette = 10=#8affc9
 palette = 11=#ffd166
-palette = 12=#6aa8ff
+palette = 12=#ffc94d
 palette = 13=#ff7ae6
 palette = 14=#7af8ff
 palette = 15=#f4f0ff
