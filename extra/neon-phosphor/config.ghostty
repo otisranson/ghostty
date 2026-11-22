@@ -1,0 +1,58 @@
+# ┌──────────────────────────────────────────────────────────────┐
+# │  NEON PHOSPHOR — cyberpunk neon on a 1970s Bell Labs tube    │
+# │  Docs: https://ghostty.org/docs/config                       │
+# └──────────────────────────────────────────────────────────────┘
+
+# ── Fork feature ───────────────────────────────────────────────
+# Character-by-character output delay (feature/output-delay build)
+output-delay = 2ms
+
+# ── Type ───────────────────────────────────────────────────────
+# IBM Plex Mono is IBM's own typeface; DejaVu is the fallback until it's installed.
+font-family = IBM Plex Mono
+font-family = DejaVu Sans Mono
+font-size = 13
+font-thicken = true
+adjust-cell-height = 10%
+
+# ── Glass & cursor ─────────────────────────────────────────────
+custom-shader = shaders/crt.glsl
+custom-shader-animation = false
+
+cursor-style = block
+cursor-style-blink = true
+cursor-color = #ff2bd6
+cursor-text = #0a0614
+shell-integration-features = no-cursor
+
+window-padding-x = 14
+window-padding-y = 10
+window-padding-balance = true
+window-padding-color = background
+background-opacity = 0.96
+window-theme = dark
+
+# ── Colours ────────────────────────────────────────────────────
+# Phosphor-green text on a violet-black tube, with neon accents.
+background = #0a0614
+foreground = #3dffa8
+selection-background = #ff2bd6
+selection-foreground = #0a0614
+minimum-contrast = 1.1
+
+palette = 0=#1a1029
+palette = 1=#ff2e63
+palette = 2=#3dffa8
+palette = 3=#ffb000
+palette = 4=#2d7bff
+palette = 5=#ff2bd6
+palette = 6=#00f0ff
+palette = 7=#c8c3e0
+palette = 8=#4a3b66
+palette = 9=#ff6b9a
+palette = 10=#8affc9
+palette = 11=#ffd166
+palette = 12=#6aa8ff
+palette = 13=#ff7ae6
+palette = 14=#7af8ff
+palette = 15=#f4f0ff

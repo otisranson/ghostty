@@ -38,6 +38,21 @@ DEC VT-style teletypes), instead of all at once.
 output-delay = 5ms
 ```
 
+<p align="center">
+  <img src="images/output-delay/demo.gif" alt="Text typing out one character at a time in Ghostty with output-delay set to 5ms" width="720">
+</p>
+
+<details>
+<summary>Screenshot</summary>
+<p align="center">
+  <img src="images/output-delay/screenshot.png" alt="Ghostty with the Neon Phosphor theme after the demo finishes" width="720">
+</p>
+</details>
+
+The recording uses the Neon Phosphor config below and was made in a
+VirtualBox VM with software rendering, so it runs a little slower than the
+5ms setting would on real hardware.
+
 - **Off by default** (`0`). Any duration works, e.g. `5ms` or `30ms`.
 - **Only printable characters are delayed.** Escape sequences and control
   characters go through immediately, so colors and cursor movement stay fast.
@@ -63,6 +78,26 @@ zig build -Doptimize=ReleaseFast
 
 See [HACKING.md](HACKING.md) for the required Zig version and system
 dependencies.
+
+### My config: Neon Phosphor
+
+The theme in the demo is my own config, in
+[`extra/neon-phosphor/`](extra/neon-phosphor). It's cyberpunk neon on a
+1970s Bell Labs-style screen: phosphor-green text on a violet-black
+background, magenta block cursor, IBM Plex Mono, and a CRT shader with
+screen curvature, glow, scanlines and a vignette.
+
+To use it, copy both files into your Ghostty config folder:
+
+```sh
+mkdir -p ~/.config/ghostty/shaders
+cp extra/neon-phosphor/config.ghostty ~/.config/ghostty/
+cp extra/neon-phosphor/shaders/crt.glsl ~/.config/ghostty/shaders/
+```
+
+It expects [IBM Plex Mono](https://github.com/IBM/plex) to be installed and
+falls back to DejaVu Sans Mono without it. The `output-delay` line only
+works with this fork; upstream Ghostty will report it as an unknown option.
 
 ## About
 
