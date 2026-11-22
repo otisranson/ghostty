@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Ghostty tray
+Comment=Minimize Ghostty windows to the system tray
+Exec=ghostty-tray
+Icon=com.mitchellh.ghostty
+X-GNOME-Autostart-enabled=true

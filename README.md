@@ -215,3 +215,36 @@ cp extra/neon-phosphor/shaders/crt.glsl ~/.config/ghostty/shaders/
 It expects [IBM Plex Mono](https://github.com/IBM/plex) to be installed and
 falls back to DejaVu Sans Mono without it. The `output-delay` line only
 works with this fork; upstream Ghostty will report it as an unknown option.
+
+### Full-colour tray icons
+
+[`extra/neon-phosphor/tray-icons/build.py`](extra/neon-phosphor/tray-icons/build.py)
+builds a small icon theme, `NeonPhosphor-Icons`, that swaps XFCE's flat
+one-colour tray icons (volume, notifications, battery, network) for
+full-colour [Papirus](https://github.com/PapirusDevelopmentTeam/papirus-icon-theme)
+pictures. Muted, disconnected and new-notification states get small badges.
+The tray plugins ask for "-symbolic" icon names, which GTK paints in one
+colour, so the script answers those names with PNGs, which GTK leaves alone.
+Everything else is inherited from Papirus-Dark.
+
+```sh
+python3 extra/neon-phosphor/tray-icons/build.py   # needs Papirus-Dark in ~/.local/share/icons
+xfconf-query -c xsettings -p /Net/IconThemeName -s NeonPhosphor-Icons
+xfconf-query -c xfce4-panel -p /plugins/plugin-5/symbolic-icons -s false   # your systray plugin id may differ
+```
+
+### Ghostty tray icon
+
+[`extra/neon-phosphor/ghostty-tray/`](extra/neon-phosphor/ghostty-tray) is a
+small helper that keeps a Ghostty icon in the system tray. Minimized Ghostty
+windows leave the taskbar and go to the tray. Left-click the icon to restore
+the latest one (or focus Ghostty, or launch it), and right-click for a list
+of hidden windows and "New window". It watches windows from outside
+Ghostty, so it works with any build. X11 only; it needs the libwnck
+introspection data (`gir1.2-wnck-3.0` on Debian/Ubuntu).
+
+```sh
+sudo apt install gir1.2-wnck-3.0
+install -m 755 extra/neon-phosphor/ghostty-tray/ghostty-tray ~/.local/bin/
+cp extra/neon-phosphor/ghostty-tray/ghostty-tray.desktop ~/.config/autostart/
+```

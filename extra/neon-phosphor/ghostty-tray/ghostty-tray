@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""ghostty-tray: minimize Ghostty windows to the system tray.
+
+When a Ghostty window is minimized it is taken off the taskbar and a Ghostty
+icon appears in the tray. Left-click restores the most recently hidden
+window (or, with nothing hidden, focuses Ghostty, or launches it if it isn't
+running); right-click lists every hidden window, plus "Restore all" and
+"New window". The icon is always in the tray while this helper runs.
+
+Works with any Ghostty build (it watches windows from outside, via libwnck),
+so nothing in Ghostty itself needs to change. X11 only.
+Started at login by ~/.config/autostart/ghostty-tray.desktop.
+Needs: gir1.2-wnck-3.0
+"""
+import signal
+import subprocess
+import warnings
+
+import gi
+
+gi.require_version("Gtk", "3.0")
+gi.require_version("Wnck", "3.0")
+from gi.repository import GLib, Gtk, Wnck  # noqa: E402
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)  # Gtk.StatusIcon
+
+GHOSTTY_CLASSES = {"com.mitchellh.ghostty", "ghostty"}
+ICON = "com.mitchellh.ghostty"
+
+
+def is_ghostty(win):
+    return win.get_window_type() == Wnck.WindowType.NORMAL and (
+        (win.get_class_group_name() or "") in GHOSTTY_CLASSES
+        or (win.get_class_instance_name() or "") in GHOSTTY_CLASSES
+    )
+
+
+def now():
+    return Gtk.get_current_event_time() or GLib.get_monotonic_time() // 1000
+
+
+class GhosttyTray:
+    def __init__(self):
+        self.hidden = []  # Wnck.Window, most recently hidden last
+        self.handlers = {}
+
+        self.icon = Gtk.StatusIcon.new_from_icon_name(ICON)
+        self.icon.set_title("Ghostty")
+        self.icon.set_visible(True)
+        self.icon.connect("activate", lambda *_: self.on_click())
+        self.icon.connect("popup-menu", self.show_menu)
+
+        self.screen = Wnck.Screen.get_default()
+        self.screen.force_update()
+        self.screen.connect("window-opened", lambda _s, w: self.track(w))
+        self.screen.connect("window-closed", lambda _s, w: self.untrack(w))
+        for win in self.screen.get_windows():
+            self.track(win)
+        self.refresh()
+
+    # ── window tracking ────────────────────────────────────────────
+    def track(self, win):
+        if not is_ghostty(win) or win.get_xid() in self.handlers:
+            return
+        self.handlers[win.get_xid()] = win.connect("state-changed", self.on_state)
+        if win.is_minimized():
+            self.hide(win)
+
+    def untrack(self, win):
+        hid = self.handlers.pop(win.get_xid(), None)
+        if hid is not None:
+            win.disconnect(hid)
+        self.forget(win)
+
+    def on_state(self, win, changed, new):
+        if not changed & Wnck.WindowState.MINIMIZED:
+            return
+        if new & Wnck.WindowState.MINIMIZED:
+            self.hide(win)
+        else:
+            self.show(win)
+
+    # ── hide / show ────────────────────────────────────────────────
+    def hide(self, win):
+        if win not in self.hidden:
+            self.hidden.append(win)
+        win.set_skip_tasklist(True)
+        self.refresh()
+
+    def show(self, win):
+        win.set_skip_tasklist(False)
+        self.forget(win)
+
+    def forget(self, win):
+        if win in self.hidden:
+            self.hidden.remove(win)
+        self.refresh()
+
+    def restore(self, win):
+        win.set_skip_tasklist(False)
+        win.unminimize(now())
+        win.activate(now())
+
+    def on_click(self):
+        """Restore the latest hidden window; else focus Ghostty; else launch it."""
+        if self.hidden:
+            self.restore(self.hidden[-1])
+            return
+        wins = [w for w in self.screen.get_windows_stacked() if is_ghostty(w)]
+        if wins:
+            wins[-1].activate(now())  # topmost Ghostty window
+        else:
+            self.new_window()
+
+    def new_window(self):
+        subprocess.Popen(["ghostty", "+new-window"])
+
+    def restore_all(self):
+        for win in list(self.hidden):
+            self.restore(win)
+
+    def refresh(self):
+        n = len(self.hidden)
+        if n == 1:
+            self.icon.set_tooltip_text(f"Ghostty: {self.hidden[0].get_name()}\nClick to restore")
+        elif n:
+            self.icon.set_tooltip_text(f"Ghostty: {n} hidden windows\nClick to restore the latest")
+        else:
+            self.icon.set_tooltip_text("Ghostty\nMinimized windows go here")
+
+    # ── menu ───────────────────────────────────────────────────────
+    def show_menu(self, icon, button, time):
+        menu = Gtk.Menu()
+        for win in reversed(self.hidden):
+            title = win.get_name() or "Ghostty"
+            item = Gtk.MenuItem(label=title if len(title) <= 60 else title[:57] + "…")
+            item.connect("activate", lambda _i, w=win: self.restore(w))
+            menu.append(item)
+        if len(self.hidden) > 1:
+            item = Gtk.MenuItem(label="Restore all")
+            item.connect("activate", lambda *_: self.restore_all())
+            menu.append(item)
+        menu.append(Gtk.SeparatorMenuItem())
+        item = Gtk.MenuItem(label="New window")
+        item.connect("activate", lambda *_: self.new_window())
+        menu.append(item)
+        menu.show_all()
+        menu.popup(None, None, Gtk.StatusIcon.position_menu, icon, button, time)
+        self.menu = menu  # keep a reference while it is open
+
+    # ── shutdown: never leave windows stranded off the taskbar ─────
+    def quit(self, *_):
+        for win in self.hidden:
+            win.set_skip_tasklist(False)
+        Gtk.main_quit()
+        return GLib.SOURCE_REMOVE
+
+
+def main():
+    tray = GhosttyTray()
+    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, sig, tray.quit)
+    Gtk.main()
+
+
+if __name__ == "__main__":
+    main()
