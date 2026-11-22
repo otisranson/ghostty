@@ -27,6 +27,12 @@ This is a personal fork of [Ghostty](https://github.com/ghostty-org/ghostty)
 that adds one new feature: **`output-delay`**, a typewriter-style effect for
 terminal output.
 
+> [!NOTE]
+> This branch is **not intended for upstream**. It will not be submitted as a
+> pull request to `ghostty-org/ghostty`; it lives only in this fork. See the
+> upstream discussion:
+> [ghostty-org/ghostty#15310](https://github.com/ghostty-org/ghostty/discussions/15310).
+
 ### `output-delay`
 
 Set a delay between printed characters and output appears one character at a
