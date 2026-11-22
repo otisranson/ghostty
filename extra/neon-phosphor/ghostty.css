@@ -1,0 +1,47 @@
+/* Collapse the header buttons we don't want (see config.ghostty, "Title bar"). */
+tabbar button.toggle,
+tabbar menubutton,
+windowcontrols .icon,
+windowcontrols menubutton {
+  opacity: 0;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  -gtk-icon-size: 1px;
+}
+
+/* Give the tab/title bar the same tint + opacity as the terminal
+   (background #0a0614 at background-opacity 0.85), so the whole window is uniform.
+   Keep this alpha in sync with background-opacity in config.ghostty. */
+tabbar > revealer > box {
+  background-color: rgba(10, 6, 20, 0.85);
+  box-shadow: none;
+}
+
+/* Slim title bar: shrink the bar, tabs and buttons. */
+tabbar > revealer > box {
+  min-height: 0;
+  padding: 2px 4px;
+}
+tabbar tab,
+tabbar tabbox,
+tabbar tabboxchild {
+  min-height: 22px;
+}
+tabbar tab {
+  padding: 0 6px;
+}
+tabbar button,
+tabbar splitbutton > button,
+windowcontrols button {
+  min-height: 20px;
+  min-width: 20px;
+  padding: 0 2px;
+  margin: 0 1px;
+}
+windowcontrols button > image {
+  padding: 2px;
+}

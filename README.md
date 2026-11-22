@@ -198,13 +198,17 @@ The theme in the demo is my own config, in
 [`extra/neon-phosphor/`](extra/neon-phosphor). It's cyberpunk neon on a
 1970s Bell Labs-style screen: phosphor-green text on a violet-black
 background, magenta block cursor, IBM Plex Mono, and a CRT shader with
-screen curvature, glow, scanlines and a vignette.
+screen curvature, glow, scanlines and a vignette. The window is 85% opaque,
+with a slim title bar that merges the tabs and window controls and keeps
+only the new-tab and minimize/maximize/close buttons (GTK only, via
+`ghostty.css`). The title bar uses the same opacity as the terminal, so if
+you change `background-opacity`, change the alpha in `ghostty.css` to match.
 
-To use it, copy both files into your Ghostty config folder:
+To use it, copy these files into your Ghostty config folder:
 
 ```sh
 mkdir -p ~/.config/ghostty/shaders
-cp extra/neon-phosphor/config.ghostty ~/.config/ghostty/
+cp extra/neon-phosphor/config.ghostty extra/neon-phosphor/ghostty.css ~/.config/ghostty/
 cp extra/neon-phosphor/shaders/crt.glsl ~/.config/ghostty/shaders/
 ```
 

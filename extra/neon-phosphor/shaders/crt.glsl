@@ -14,21 +14,24 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     float dist = dot(cc, cc);
     uv += cc * dist * CURVATURE;
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
-        fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+        fragColor = vec4(0.0);  // transparent outside the curved glass
         return;
     }
 
-    vec3 col = texture(iChannel0, uv).rgb;
+    // Ghostty passes premultiplied alpha; keep it so background-opacity works.
+    vec4 base = texture(iChannel0, uv);
+    vec3 col = base.rgb;
 
     // Bloom: cheap 5x5 box blur added back on top
     vec2 px = 1.5 / iResolution.xy;
-    vec3 glow = vec3(0.0);
+    vec4 glow = vec4(0.0);
     for (int x = -2; x <= 2; x++) {
         for (int y = -2; y <= 2; y++) {
-            glow += texture(iChannel0, uv + vec2(x, y) * px).rgb;
+            glow += texture(iChannel0, uv + vec2(x, y) * px);
         }
     }
-    col += (glow / 25.0) * BLOOM;
+    col += (glow.rgb / 25.0) * BLOOM;
+    float alpha = base.a;  // glow brightens colour only; never adds opacity
 
     // Scanlines (2px period)
     col *= (1.0 - SCANLINE) + SCANLINE * sin(fragCoord.y * 3.14159);
@@ -36,5 +39,5 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     // Vignette
     col *= 1.0 - dist * VIGNETTE;
 
-    fragColor = vec4(col, 1.0);
+    fragColor = vec4(col, alpha);
 }

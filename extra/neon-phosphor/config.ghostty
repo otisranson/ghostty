@@ -11,9 +11,9 @@ output-delay = 4ms
 # IBM Plex Mono is IBM's own typeface; DejaVu is the fallback until it's installed.
 font-family = IBM Plex Mono
 font-family = DejaVu Sans Mono
-font-size = 13
+font-size = 11
 font-thicken = true
-adjust-cell-height = 10%
+adjust-cell-height = 2%
 
 # ── Glass & cursor ─────────────────────────────────────────────
 custom-shader = shaders/crt.glsl
@@ -25,12 +25,23 @@ cursor-color = #ff2bd6
 cursor-text = #0a0614
 shell-integration-features = no-cursor
 
-window-padding-x = 14
-window-padding-y = 10
+window-padding-x = 6
+window-padding-y = 4
 window-padding-balance = true
 window-padding-color = background
-background-opacity = 0.96
+background-opacity = 0.85
 window-theme = dark
+
+# ── Title bar ──────────────────────────────────────────────────
+# One slim bar: tabs + window controls merged (no separate headerbar row).
+gtk-titlebar-style = tabs
+gtk-toolbar-style = flat
+gtk-wide-tabs = false
+# Keep only: [+ new tab] ... [min][max][close].
+# GTK4 CSS has no display:none, so the extra buttons are collapsed to zero size.
+# Hides: tab-overview grid, hamburger menu, new-split dropdown arrow, window-menu icon.
+# (Right-click in the terminal still opens the menu.)
+gtk-custom-css = ghostty.css
 
 # ── Colours ────────────────────────────────────────────────────
 # Phosphor-green text on a violet-black tube, with neon accents.
